@@ -1,0 +1,6 @@
+[submodule "git-filter-repo"]
+	path = git-filter-repo
+	url = https://github.com/newren/git-filter-repo.git
+[submodule "corundum"]
+	path = corundum
+	url = https://github.com/corundum/corundum.git
