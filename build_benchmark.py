@@ -2,15 +2,41 @@ import sys
 import os
 import subprocess
 
+'''
+dictionary containing all of the repos which we can turn into benchmarks
+key: name of directory produced by git cloning
+value: (url to clone, base hash to build benchmark from)
+'''
+source_repos = {
+    'corundum':('https://github.com/corundum/corundum.git','1ca0151b97af85aa5dd306d74b6bcec65904d2ce')
+}
+
 def clone_source_repo(name):
     '''
-    git-filter-repo doesn't like submodules, so instead we clone the source repo
-    TODO: set base commit
-    '''
-    source_repos = {'corundum':'https://github.com/corundum/corundum.git'}
+    Clone the repo called `name` (which must also be a key in source_repos), and
+    reset it to the base commit.
 
-    # clone the source repo (git will not overwrite an existing repo)
-    subprocess.run(['git', 'clone', source_repos[name]])
+    We clone instead of using git submodules, since submodules produce a
+    complicated .git/ structure that confuses git-filter-repo.
+    '''
+
+    repo_url = source_repos[name][0]
+    base_sha = source_repos[name][1]
+
+    # bailout if the repo all ready exists
+    isdir = os.path.isdir(name)
+    if isdir:
+        print("QUITTING: "+name+" already exists!")
+        exit()
+
+    # clone the source repo
+    subprocess.run(['git', 'clone', repo_url])
+
+    # reset the source repo to the base commit
+    subprocess.run(['git', 'reset', '--hard', base_sha], cwd=name)
+
+    # purge the reflog so that we don't trigger safety checks in git-filter-repo
+    subprocess.run(['git', 'reflog', 'delete', 'HEAD@{1}'], cwd=name)
 
 
 def main():
