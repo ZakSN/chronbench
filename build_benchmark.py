@@ -5,9 +5,6 @@ import argparse
 import shutil
 import configparser
 
-sys.path.insert(1, 'git-filter-repo')
-import git_filter_repo as gfr
-
 def clone_source_repo(benchmark):
     '''
     Clone the source repo, and reset it to the base commit. The `benchmark`
@@ -37,13 +34,17 @@ def clone_source_repo(benchmark):
     # purge the reflog so that we don't trigger safety checks in git-filter-repo
     subprocess.run(['git', 'reflog', 'delete', 'HEAD@{1}'], cwd=name)
 
-def domesticate_source_repo(benchmark):
+def domesticate_source_repo(benchmark, relative_gfr_path):
     '''
     Construct flattening instructions from the fileset and then use the fileset
     and the flattening instructions to rewrite the source repo.
 
     result is a "domesticated" (i.e. suitable as a benchmark) repository
     '''
+
+    sys.path.insert(1, relative_gfr_path)
+    import git_filter_repo as gfr
+
     name = benchmark.sections()[0]
     fileset = benchmark[name]['fileset'].split()
 
@@ -123,7 +124,7 @@ def main():
         cleanup_benchmark(benchmark)
     else:
         clone_source_repo(benchmark)
-        domesticate_source_repo(benchmark)
+        domesticate_source_repo(benchmark, 'git-filter-repo')
 
 if __name__ == '__main__':
     main()
