@@ -34,29 +34,22 @@ def run_vivado_synth(name, top):
     with open(synth_script, 'w') as f:
         f.writelines(
             '''
-            proc runsynth {} {
-                set outputdir autosynthxpr
-                set project autosynth
-                set partnumber xcvu3p-ffvc1517-3-e
+            set outputdir autosynthxpr
+            set project autosynth
+            set partnumber xcvu3p-ffvc1517-3-e
 
-                file mkdir $outputdir
+            file mkdir $outputdir
 
-                create_project -part $partnumber $project $outputdir
+            create_project -part $partnumber $project $outputdir
 
-                add_files [lindex $argv 0]
+            add_files [lindex $argv 0]
 
-                synth_design -top [lindex $argv 1]
-            }
-
-            if {[catch runsynth]} {
-                puts ERROR!
-            }
+            catch {synth_design -top [lindex $argv 1]}
 
             exit
             ''')
 
     # run vivado, and surpress the output
-    #subprocess.run(['vivado', '-mode', 'tcl', '-source', 'vivado_synth.tcl', '-tclargs', name, top], capture_output=True)
     subprocess.run(['vivado', '-mode', 'tcl', '-source', synth_script, '-tclargs', name, top], capture_output=True)
 
     # ensure that vivado ran properly and bailout other wise
@@ -94,6 +87,11 @@ def get_sha(name):
     sha = sha.stdout.decode('utf8').replace('\n','')
     return sha
 
+def checkout_sha(repo, sha):
+    msg = subprocess.run(['git', 'checkout', sha], cwd=repo, capture_output=True)
+    msg = msg.stderr.decode('utf8').replace('\n','n')
+    return msg
+
 def step_back_one_commit(name):
     '''
     Step HEAD back one commit in the repo `name`
@@ -104,8 +102,7 @@ def step_back_one_commit(name):
     end_of_hist = "error: pathspec 'HEAD~1' did not match any file(s) known to git."
 
     # attempt to step back one commit
-    msg = subprocess.run(['git', 'checkout', 'HEAD~1'], cwd=name, capture_output=True)
-    msg = msg.stderr.decode('utf8').replace('\n','n')
+    msg = checkout_sha(name, 'HEAD~1')
 
     # check to see if we hit oldest commit
     if end_of_hist in msg:
@@ -123,6 +120,7 @@ def main():
     benchmark_names = benchmarks.keys()
 
     parser.add_argument('benchmark_name', choices=benchmark_names, help='synthesize the named benchmark')
+    parser.add_argument('depth', type=int, help='number of predecessor commit to try synthesizing')
 
     args = parser.parse_args()
 
@@ -130,7 +128,11 @@ def main():
 
     bpath = os.path.join('..',args.benchmark_name)
     top = benchmark[args.benchmark_name]['top']
-    commit_depth = 5
+    start_sha = benchmark[args.benchmark_name]['branch']
+    commit_depth = args.depth
+
+    # make sure we're starting at the right spot
+    checkout_sha(bpath, start_sha)
 
     for _ in range(commit_depth):
         synth_result = run_vivado_synth(bpath, top)
