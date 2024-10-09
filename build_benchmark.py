@@ -16,7 +16,6 @@ def clone_source_repo(benchmark):
 
     name = benchmark.sections()[0]
     repo_url = benchmark[name]['url']
-    base_sha = benchmark[name]['start']
 
     # bailout if the repo all ready exists
     isdir = os.path.isdir(name)
@@ -28,11 +27,15 @@ def clone_source_repo(benchmark):
     # clone the source repo
     subprocess.run(['git', 'clone', repo_url])
 
+def reset_source_repo_head(benchmark):
+    '''
+    Set the HEAD of the source repo to the start commit
+    '''
+    name = benchmark.sections()[0]
+    base_sha = benchmark[name]['start']
+
     # reset the source repo to the base commit
     subprocess.run(['git', 'reset', '--hard', base_sha], cwd=name)
-
-    # purge the reflog so that we don't trigger safety checks in git-filter-repo
-    subprocess.run(['git', 'reflog', 'delete', 'HEAD@{1}'], cwd=name)
 
 def domesticate_source_repo(benchmark, relative_gfr_path):
     '''
@@ -47,6 +50,7 @@ def domesticate_source_repo(benchmark, relative_gfr_path):
 
     name = benchmark.sections()[0]
     fileset = benchmark[name]['fileset'].split()
+    branch = benchmark[name]['branch']
 
     # descend into the source repository
     cwd = os.getcwd()
@@ -54,7 +58,7 @@ def domesticate_source_repo(benchmark, relative_gfr_path):
 
     # blow away everything that is not in the synthesizable fileset and flatten
     # the directory structure
-    arg_list = []
+    arg_list = ['--force', '--refs', branch]
     for f in fileset:
         arg_list.append('--path-match')
         arg_list.append(f)
@@ -67,6 +71,36 @@ def domesticate_source_repo(benchmark, relative_gfr_path):
 
     # return to the original working directory
     os.chdir(cwd)
+
+def truncate_filtered_repo(benchmark):
+    '''
+    Create a new root commit equal to HEAD~<depth> and then rebase
+    HEAD~<depth>..HEAD onto the new root. We use <depth> rather than a SHA since
+    gfr produces new commits with unknown hashes.
+    '''
+    name = benchmark.sections()[0]
+    branch = benchmark[name]['branch']
+    new_branch = branch + "_new"
+    start_sha = benchmark[name]['start']
+    depth = benchmark[name]['depth']
+
+    # get the stop SHA
+    stop_sha = subprocess.run(['git', 'show', '-s', 'HEAD~' + depth, '--format=format:%H'], cwd=name, capture_output=True)
+    stop_sha = stop_sha.stdout.decode('utf8')
+
+    #exit()
+
+    # create an orphan branch based on the stop commit
+    subprocess.run(['git', 'checkout', '--orphan', new_branch, stop_sha], cwd=name)
+    subprocess.run(['git', 'commit', '--author', 'Chronbench <chronbench@email.com>', '-m', 'new root'], cwd=name)
+
+    # rebase the window of interest onto branch using the orphaned new_branch
+    # as a base
+    subprocess.run(['git', 'rebase', '--onto', new_branch, stop_sha, branch], cwd=name)
+
+    # get rid of the orphan branch
+    subprocess.run(['git', 'branch', '-D', new_branch], cwd=name)
+
 
 def cleanup_benchmark(benchmark):
     '''
@@ -124,7 +158,9 @@ def main():
         cleanup_benchmark(benchmark)
     else:
         clone_source_repo(benchmark)
+        reset_source_repo_head(benchmark)
         domesticate_source_repo(benchmark, 'git-filter-repo')
+        truncate_filtered_repo(benchmark)
 
 if __name__ == '__main__':
     main()
