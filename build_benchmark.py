@@ -84,11 +84,12 @@ def truncate_filtered_repo(benchmark):
     start_sha = benchmark[name]['start']
     depth = benchmark[name]['depth']
 
+    # HEAD~<depth> is HEAD + depth commits, so correct for ObO
+    depth = str(int(depth) - 1)
+
     # get the stop SHA
     stop_sha = subprocess.run(['git', 'show', '-s', 'HEAD~' + depth, '--format=format:%H'], cwd=name, capture_output=True)
     stop_sha = stop_sha.stdout.decode('utf8')
-
-    #exit()
 
     # create an orphan branch based on the stop commit
     subprocess.run(['git', 'checkout', '--orphan', new_branch, stop_sha], cwd=name)
