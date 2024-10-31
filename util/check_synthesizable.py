@@ -44,6 +44,8 @@ def run_vivado_synth(name, top):
 
             add_files [lindex $argv 0]
 
+            update_compile_order
+
             catch {synth_design -top [lindex $argv 1]}
 
             exit
