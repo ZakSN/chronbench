@@ -4,12 +4,13 @@ import os
 import shutil
 import argparse
 import configparser
+import math
 
 sys.path.insert(1, os.path.join('..'))
 from build_benchmark import get_benchmarks
 from build_benchmark import read_benchmark_config
 
-def run_vivado_synth(name, top):
+def run_vivado_synth(name, top, logdir, prefix, sha):
     '''
     Synthesize the HDL located in name, with the top module as top, using
     Vivado.
@@ -44,6 +45,8 @@ def run_vivado_synth(name, top):
 
             add_files [lindex $argv 0]
 
+            set_property top [lindex $argv 1] [current_fileset]
+
             update_compile_order
 
             catch {synth_design -top [lindex $argv 1]}
@@ -74,8 +77,10 @@ def run_vivado_synth(name, top):
     # clean up vivado project
     shutil.rmtree(projdir)
     os.remove(journalfile)
-    os.remove(logfile)
     os.remove(synth_script)
+
+    # rename the log file with the result and sha
+    os.rename(logfile, os.path.join(logdir, prefix + "_" + sha + "_" + str(success) + ".log"))
 
     return success
 
@@ -112,6 +117,14 @@ def step_back_one_commit(name):
     else:
         return True
 
+def create_log_dir(logdir):
+    '''
+    If it doesn't all ready exist create a directory to preserve synthesis logs
+    '''
+    logdir_exists = os.path.isdir(logdir)
+    if not logdir_exists:
+        os.makedirs(logdir)
+
 def main():
     parser = argparse.ArgumentParser(
         prog='check_synthesizable.py',
@@ -136,9 +149,15 @@ def main():
     # make sure we're starting at the right spot
     checkout_sha(bpath, start_sha)
 
-    for _ in range(commit_depth):
-        synth_result = run_vivado_synth(bpath, top)
+    logdir = "synth_logs"
+    create_log_dir(logdir)
+    prefix_digits = math.ceil(math.log(commit_depth, 10))
+
+    for prefix in range(commit_depth):
         sha = get_sha(bpath)
+        prefix_str = "{:0"+str(prefix_digits)+"d}"
+        prefix_str = prefix_str.format(prefix)
+        synth_result = run_vivado_synth(bpath, top, logdir, prefix_str, sha)
 
         if synth_result:
             print(sha + " Synthesizable")
