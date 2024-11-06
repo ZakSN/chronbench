@@ -10,7 +10,7 @@ sys.path.insert(1, os.path.join('..'))
 from build_benchmark import get_benchmarks
 from build_benchmark import read_benchmark_config
 
-def run_vivado_synth(name, top, logdir, prefix, sha):
+def run_vivado_synth(name, top, logdir, prefix, sha, vivado_extra_commands, vivado_synth_args):
     '''
     Synthesize the HDL located in name, with the top module as top, using
     Vivado.
@@ -44,12 +44,12 @@ def run_vivado_synth(name, top, logdir, prefix, sha):
             create_project -part $partnumber $project $outputdir
 
             add_files [lindex $argv 0]
+            '''
+            +vivado_extra_commands+
+            '''
+            set synth_args {'''+vivado_synth_args+'''}
 
-            set_property top [lindex $argv 1] [current_fileset]
-
-            update_compile_order
-
-            catch {synth_design -top [lindex $argv 1]}
+            catch {synth_design -top [lindex $argv 1] {*}$synth_args}
 
             exit
             ''')
@@ -144,6 +144,17 @@ def main():
     bpath = os.path.join('..',args.benchmark_name)
     top = benchmark[args.benchmark_name]['top']
     start_sha = benchmark[args.benchmark_name]['branch']
+
+    #populate optional fields
+    try:
+        vivado_extra_commands = benchmark[args.benchmark_name]['vivado-extra-commands']
+    except:
+        vivado_extra_commands = ''
+    try:
+        vivado_synth_args = benchmark[args.benchmark_name]['vivado-synth-args']
+    except:
+        vivado_synth_args = ''
+
     commit_depth = args.depth
 
     # make sure we're starting at the right spot
@@ -157,7 +168,7 @@ def main():
         sha = get_sha(bpath)
         prefix_str = "{:0"+str(prefix_digits)+"d}"
         prefix_str = prefix_str.format(prefix)
-        synth_result = run_vivado_synth(bpath, top, logdir, prefix_str, sha)
+        synth_result = run_vivado_synth(bpath, top, logdir, prefix_str, sha, vivado_extra_commands, vivado_synth_args)
 
         if synth_result:
             print(sha + " Synthesizable")
