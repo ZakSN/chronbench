@@ -102,6 +102,63 @@ def truncate_filtered_repo(benchmark):
     # get rid of the orphan branch
     subprocess.run(['git', 'branch', '-D', new_branch], cwd=name)
 
+def squash_uninteresting_commits(benchmark):
+    '''
+    Assuming that the benchmark repository has been distilled to the Fileset of
+    Interest and Window of interest, squash the commits in the squash-list, into
+    their oldest non-squash list successor. The squash list is formulated as a
+    list of natural numbers indicating the index of commits to squash. Must use
+    indices instead of hashes since gfr rewrites hashes. For the purposes of
+    the squash-list we assume branch is index 0.
+    '''
+    name = benchmark.sections()[0]
+    branch = benchmark[name]['branch']
+    new_branch = branch + '_new'
+    squash_list = benchmark[name]['squash-list'].split()
+    squash_shas = []
+
+    # enusre we are starting at index 0
+    subprocess.run(['git', 'checkout', branch], cwd=name)
+
+    # get the hash of each commit in the squash list
+    for s in squash_list:
+        sha = subprocess.run(['git', 'show', '-s', 'HEAD~'+s, '--format=format:%H'], cwd=name, capture_output=True)
+        sha = sha.stdout.decode('utf8')
+
+        squash_shas.append(sha)
+
+    # get hashes for all of the interesting commits
+    unsquashed = subprocess.run(['git', 'log', '--format=format:%H'], cwd=name, capture_output=True)
+    unsquashed = unsquashed.stdout.decode('utf8').split('\n')
+    unsquashed.reverse()
+
+    # create a new branch based off the root commit
+    subprocess.run(['git', 'checkout', unsquashed[0]], cwd=name)
+    subprocess.run(['git', 'checkout', '-b', new_branch], cwd=name)
+
+    # cherry pick each commit from the original branch onto the new branch
+    # if a commit is in the squash list, squash it into the subsequent commit
+    to_squash = False
+    for cidx in range(1, len(unsquashed)):
+        subprocess.run(['git', 'cherry-pick', unsquashed[cidx]], cwd=name)
+
+        # check to see if the last commit needs to be squashed into the one just
+        # applied
+        if to_squash:
+            # squash the last two commits, and accept the default message
+            subprocess.run(['git', 'reset', '--hard', 'HEAD~2'], cwd=name)
+            subprocess.run(['git', 'merge', '--squash', 'HEAD@{1}'], cwd=name)
+            subprocess.run(['git', 'commit', '--no-edit', '--author', 'Chronbench <chronbench@email.com>'], cwd=name)
+
+        # check if the commit we just applied needs to be squashed
+        if unsquashed[cidx] in squash_shas:
+            to_squash = True
+        else:
+            to_squash = False
+
+    # delete the unsquashed branch and rename the squashed branch
+    subprocess.run(['git', 'branch', '-D', branch], cwd=name)
+    subprocess.run(['git', 'branch', '-m', new_branch, branch], cwd=name)
 
 def cleanup_benchmark(benchmark):
     '''
@@ -162,6 +219,7 @@ def main():
         reset_source_repo_head(benchmark)
         domesticate_source_repo(benchmark, 'git-filter-repo')
         truncate_filtered_repo(benchmark)
+        squash_uninteresting_commits(benchmark)
 
 if __name__ == '__main__':
     main()
