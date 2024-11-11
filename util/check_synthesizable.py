@@ -5,6 +5,7 @@ import shutil
 import argparse
 import configparser
 import math
+import multiprocessing
 
 sys.path.insert(1, os.path.join('..'))
 from build_benchmark import get_available_benchmarks
@@ -113,19 +114,41 @@ class CheckSynthesizable:
     HEAD..HEAD~<depth> of the provided benchmark, and then run the provided
     synthesis tool on each.
     '''
-    def __init__(self, benchmark, depth, tool):
+    def __init__(self, benchmark, depth, tool, workers=1):
         self.cbb = ChronbenchBenchmark(benchmark, None)
         self.depth = depth
         self.synth_dir = os.path.join('util', self.cbb.name + '_synth_projects')
         self.tool = tool
+        self.workers = workers
 
     def synthesize_snapshots(self):
         '''
         Create a synthesis project for each commit in the range
-        HEAD..HEAD~<depth>, and run synthesis in each.
+        HEAD..HEAD~<depth>. Assign projects to workers as uniformly as possible,
+        and then run synthesis in each.
         '''
+        # get a list of all the projects to synthesize
         projects = self._setup_synthesis_projects()
-        for project in projects:
+
+        # distribute projects amongst workers to form jobs
+        jobs = [ [] for _ in range(self.workers)]
+        while len(projects) > 0:
+            for w in range(self.workers):
+                try:
+                    jobs[w].append(projects.pop())
+                except:
+                    pass
+
+        # launch a worker for each job
+        for j in jobs:
+            proc = multiprocessing.Process(target=CheckSynthesizable._launch_worker, args=(self, j))
+            proc.start()
+
+    def _launch_worker(self, job):
+        '''
+        Run synthesis for all projects in a job
+        '''
+        for project in job:
             project.run_synthesis()
 
     def _setup_synthesis_projects(self):
@@ -213,13 +236,14 @@ def main():
     parser.add_argument('tool', choices=tools.keys(), help='synthesis tool to use')
     parser.add_argument('benchmark_name', choices=benchmark_names, help='synthesize the named benchmark')
     parser.add_argument('depth', type=int, help='number of predecessor commits to try synthesizing')
+    parser.add_argument('-j', type=int, help='max number of synthesis jobs to run', default=1)
 
     args = parser.parse_args()
 
     benchmark = benchmarks[args.benchmark_name]
     depth = args.depth
 
-    cs = CheckSynthesizable(benchmark, depth, tools[args.tool])
+    cs = CheckSynthesizable(benchmark, depth, tools[args.tool], args.j)
     cs.synthesize_snapshots()
 
 if __name__ == '__main__':
