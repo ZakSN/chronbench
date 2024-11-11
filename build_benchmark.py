@@ -25,7 +25,11 @@ class ChronbenchBenchmark:
         self.branch   = self.benchmark['branch']
         self.depth    = self.benchmark['depth']
         self.fileset  = self.benchmark['fileset'].split()
-        self.squash_list = self.benchmark['squash-list'].split()
+        # not all benchmarks have squash lists
+        try:
+            self.squash_list = self.benchmark['squash-list'].split()
+        except:
+            self.squash_list = None
 
         self.phony_author = 'Chronbench <chronbench@email.com>'
 
@@ -169,6 +173,11 @@ class ChronbenchBenchmark:
         Must use indices instead of hashes since gfr rewrites hashes. For the
         purposes of the squash-list we assume <branch> is index 0.
         '''
+
+        # not all benchmarks have squash lists
+        if self.squash_list is None:
+            return
+
         new_branch = self.branch + '_new'
         squash_shas = []
 
