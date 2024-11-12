@@ -15,24 +15,105 @@ class SynthesisTool:
     '''
     A generic synthesis tool class
     '''
+    tool_name = 'GENERIC'
+    synth_script_name = 'GENERIC_synth_script.tcl'
+    success_msg = 'GENERIC SUCCESS'
+    logfile_name = 'path_to_synth_log'
+
     def __init__(self, proj_dir, cbb):
         self.proj_dir = proj_dir
         self.cbb = cbb
-        pass
-
-    def run_synthesis(self):
-        print("Running Synthesis on: "+self.proj_dir)
-
-class VivadoSynthesis(SynthesisTool):
-    '''
-    Use vivado to synthesize a commit level synthesis project
-    '''
 
     def run_synthesis(self):
         self._build_synth_script()
         self._write_synth_script()
-        self._run_vivado()
+        self._run_tool()
         self._report_result()
+
+    def _build_synth_script(self):
+        pass
+
+    def _write_synth_script(self):
+        self.synth_script_path = os.path.join(self.proj_dir, self.synth_script_name)
+        with open(self.synth_script_path, 'w') as script:
+            for line in self.synth_script:
+                script.write(line+'\n')
+
+    def _run_tool(self):
+        pass
+
+    def _report_result(self):
+        '''
+        Check to see if synthesis was successful.
+        '''
+        # read the log to see if synthesis was successful
+        logfile = os.path.join(self.proj_dir, self.logfile_name)
+        with open(logfile, 'r') as log:
+            synth_result = log.readlines()
+
+        success = False
+        for line in synth_result:
+            if self.success_msg in line:
+                success = True
+
+        # print a message to the terminal and write a PASS/FAIL file
+        if success:
+            r = 'PASS'
+        else:
+            r = 'FAIL'
+        with open(os.path.join(self.proj_dir, self.tool_name + '_synth.'+r), 'w') as f:
+            f.write(r+'\n')
+        print(self.proj_dir+': '+r)
+
+class QuartusSynthesis(SynthesisTool):
+    '''
+    Use Quartus to synthesize a commit level synthesis project.
+
+    Assumes Quartus executables are on the system path
+    '''
+    tool_name = 'quartus'
+    synth_script_name = 'quartus_synth_script.tcl'
+    success_msg = 'Info: Successfully synthesized'
+    logfile_name = os.path.join('output_files', 'autoqpf.syn.rpt')
+
+    def _build_synth_script(self):
+        '''
+        Create a tcl script to run Quartus Synthesis
+        '''
+        # TODO check for Quartus specific hacks
+
+        # get the benchmark top module
+        top = self.cbb.benchmark['top']
+
+        # create the synth script
+        self.synth_script = [
+            'project_new autoqpf -overwrite',
+            'set_global_assignment -name TOP_LEVEL_ENTITY '+top,
+            'set_global_assignment -name DEVICE 1SG085HN1F43E1VG',
+            'set_global_assignment -name FAMILY "Stratix 10"',
+            'set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files',
+            'set_global_assignment -name SEARCH_PATH src/',
+            'project_close',
+        ]
+
+    def _run_tool(self):
+        '''
+        Use quaruts to build a project from the source files and then
+        synthesize that project. Assumes Quartus executables are on the path
+        '''
+        subprocess.run(['quartus_sh', '-t', 'quartus_synth_script.tcl'], cwd=self.proj_dir, capture_output=True)
+        subprocess.run(['quartus_syn', 'autoqpf'], cwd=self.proj_dir, capture_output=True)
+
+class VivadoSynthesis(SynthesisTool):
+    '''
+    Use Vivado to synthesize a commit level synthesis project.
+
+    Assumes Vivado executables are on the system path
+    '''
+    tool_name = 'vivado'
+    synth_script_name = 'vivado_synth_script.tcl'
+    success_msg = 'synth_design completed successfully'
+    logfile_name = 'vivado.log'
 
     def _build_synth_script(self):
         '''
@@ -65,48 +146,12 @@ class VivadoSynthesis(SynthesisTool):
             'exit',
         ]
 
-    def _write_synth_script(self):
-        self.synth_script_name = 'vivado_synth_script.tcl'
-        self.synth_script_path = os.path.join(self.proj_dir, self.synth_script_name)
-        with open(self.synth_script_path, 'w') as script:
-            for line in self.synth_script:
-                script.write(line+'\n')
-
-    def _run_vivado(self):
+    def _run_tool(self):
         '''
         Run Vivado in headless mode to execute the synthscript in the commit
         level project directory. Assume Vivado is on the path.
         '''
         subprocess.run(['vivado', '-mode', 'tcl', '-source', self.synth_script_name], cwd=self.proj_dir, capture_output=True)
-
-    def _report_result(self):
-        '''
-        Check to see if Vivado synthesis was successful. Prints message to
-        stdout, and writes a pass fail file in the project directory.
-        '''
-        # This message should turn up in the log to indicate successful synthesis
-        success_msg = 'synth_design completed successfully'
-
-        # Vivado logfiles are always called vivado.log
-        logfile = os.path.join(self.proj_dir, 'vivado.log')
-
-        # read the log to see if synthesis was successful
-        with open(logfile, 'r') as vlog:
-            synth_result = vlog.readlines()
-
-        success = False
-        for line in synth_result:
-            if success_msg in line:
-                success = True
-
-        def result(r):
-            with open(os.path.join(self.proj_dir, 'vivado_synth.'+r), 'w') as f:
-                f.write(r+'\n')
-            print(self.proj_dir+': '+r)
-        if success:
-            result('PASS')
-        else:
-            result('FAIL')
 
 class CheckSynthesizable:
     '''
@@ -117,7 +162,7 @@ class CheckSynthesizable:
     def __init__(self, benchmark, depth, tool, workers=1):
         self.cbb = ChronbenchBenchmark(benchmark, None)
         self.depth = depth
-        self.synth_dir = os.path.join('util', self.cbb.name + '_synth_projects')
+        self.synth_dir = os.path.join('util', self.cbb.name+'_'+tool.tool_name+'_synth_projects')
         self.tool = tool
         self.workers = workers
 
@@ -230,7 +275,8 @@ def main():
     benchmark_names = benchmarks.keys()
 
     tools = {
-        'vivado': VivadoSynthesis
+        'vivado':  VivadoSynthesis,
+        'quartus': QuartusSynthesis,
     }
 
     parser.add_argument('tool', choices=tools.keys(), help='synthesis tool to use')
