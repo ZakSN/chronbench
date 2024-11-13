@@ -80,7 +80,11 @@ class QuartusSynthesis(SynthesisTool):
         '''
         Create a tcl script to run Quartus Synthesis
         '''
-        # TODO check for Quartus specific hacks
+        # check for Quartus specific hacks
+        try:
+            quartus_extra_commands = self.cbb.benchmark['quartus-extra-commands'].split('\n')
+        except:
+            quartus_extra_commands = ''
 
         # get the benchmark top module
         top = self.cbb.benchmark['top']
@@ -92,6 +96,7 @@ class QuartusSynthesis(SynthesisTool):
             'set_global_assignment -name DEVICE 1SG085HN1F43E1VG',
             'set_global_assignment -name FAMILY "Stratix 10"',
             'set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files',
+            *quartus_extra_commands,
             'set_global_assignment -name SEARCH_PATH src/',
             'project_close',
         ]
