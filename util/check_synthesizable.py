@@ -6,6 +6,7 @@ import argparse
 import configparser
 import math
 import multiprocessing
+import time
 
 sys.path.insert(1, os.path.join('..'))
 from build_benchmark import get_available_benchmarks
@@ -40,7 +41,10 @@ class SynthesisTool:
                 script.write(line+'\n')
 
     def _run_tool(self):
-        pass
+        start = time.time()
+        self._run_tool_wrapped()
+        stop = time.time()
+        self.elapsed = stop - start
 
     def _report_result(self):
         '''
@@ -63,7 +67,8 @@ class SynthesisTool:
             r = 'FAIL'
         with open(os.path.join(self.proj_dir, self.tool_name + '_synth.'+r), 'w') as f:
             f.write(r+'\n')
-        print(self.proj_dir+': '+r)
+            f.write(str(self.elapsed)+'\n')
+        print(self.proj_dir+': '+r+", "+str(self.elapsed))
 
 class QuartusSynthesis(SynthesisTool):
     '''
@@ -112,7 +117,7 @@ class QuartusSynthesis(SynthesisTool):
             'project_close',
         ]
 
-    def _run_tool(self):
+    def _run_tool_wrapped(self):
         '''
         Use quaruts to build a project from the source files and then
         synthesize that project. Assumes Quartus executables are on the path
@@ -162,7 +167,7 @@ class VivadoSynthesis(SynthesisTool):
             'exit',
         ]
 
-    def _run_tool(self):
+    def _run_tool_wrapped(self):
         '''
         Run Vivado in headless mode to execute the synthscript in the commit
         level project directory. Assume Vivado is on the path.
