@@ -8,8 +8,8 @@ import math
 import multiprocessing
 import time
 
-from tool_automation import VivadoSynthesis
-from tool_automation import QuartusSynthesis
+from tool_automation import Vivado
+from tool_automation import Quartus
 
 sys.path.insert(1, os.path.join('..'))
 from build_benchmark import get_available_benchmarks
@@ -137,8 +137,8 @@ def main():
     benchmark_names = benchmarks.keys()
 
     tools = {
-        'vivado':  VivadoSynthesis,
-        'quartus': QuartusSynthesis,
+        'vivado':  Vivado,
+        'quartus': Quartus,
     }
 
     parser.add_argument('tool', choices=tools.keys(), help='synthesis tool to use')

@@ -2,74 +2,106 @@ import os
 import subprocess
 import time
 
-class SynthesisTool:
+class AbstractFPGATool:
     '''
-    A generic synthesis tool class
+    Abstract class for automating FPGA flows over a Chronbench Benchmark
     '''
-    tool_name = 'GENERIC'
-    synth_script_name = 'GENERIC_synth_script.tcl'
-    success_msg = 'GENERIC SUCCESS'
-    logfile_name = 'path_to_synth_log'
+    tool_name = 'ABSTRACT'
+    synth_script_name  = 'ABSTRACT_synth_script.tcl'
+    synth_success_msg  = 'ABSTRACT SYNTH SUCCESS'
+    synth_logfile_name = 'synth_log'
+    pnr_script_name = 'ABSTRACT_pnr_script.tcl'
+    pnr_success_msg = 'ABSTRACT PNR SUCCESS'
+    pnr_logfile_name = 'pnr_log'
+    sdc_name = 'ABSTRACT.sdc'
 
-    def __init__(self, proj_dir, cbb):
+    def __init__(self, proj_dir, chronbench_benchmark):
         self.proj_dir = proj_dir
-        self.cbb = cbb
+        self.cbb = chronbench_benchmark
 
-    def run_synthesis(self):
-        self._build_synth_script()
-        self._write_synth_script()
-        self._run_tool()
-        self._report_result()
-
-    def _build_synth_script(self):
-        pass
-
-    def _write_synth_script(self):
-        self.synth_script_path = os.path.join(self.proj_dir, self.synth_script_name)
-        with open(self.synth_script_path, 'w') as script:
-            for line in self.synth_script:
-                script.write(line+'\n')
-
-    def _run_tool(self):
-        start = time.time()
-        self._run_tool_wrapped()
-        stop = time.time()
-        self.elapsed = stop - start
-
-    def _report_result(self):
+    def _write_file(self, path, name, contents):
         '''
-        Check to see if synthesis was successful.
+        Write a file to /path/name, containing contents.
         '''
-        # read the log to see if synthesis was successful
-        logfile = os.path.join(self.proj_dir, self.logfile_name)
+        f = os.path.join(path, name)
+        with open(f, 'w') as to_write:
+            for line in contents:
+                to_write.write(line+'\n')
+
+    def _check_log(self, logfile, success_msg):
+        '''
+        Check each line of logfile to see if it contains success_msg.
+        '''
         with open(logfile, 'r') as log:
-            synth_result = log.readlines()
+            loglines = log.readlines()
+        for line in loglines:
+            if success_msg in line:
+                return True
+        return False
 
-        success = False
-        for line in synth_result:
-            if self.success_msg in line:
-                success = True
-
-        # print a message to the terminal and write a PASS/FAIL file
+    def _report_result(self, success, elapsed, step):
+        '''
+        write a result file to the project directory named
+        <tool>_<step>.[PASS|FAIL], that contains the time elapsed to produce
+        the result. Also print this information to the terminal.
+        '''
         if success:
             r = 'PASS'
         else:
             r = 'FAIL'
-        with open(os.path.join(self.proj_dir, self.tool_name + '_synth.'+r), 'w') as f:
+        with open(os.path.join(self.proj_dir, self.tool_name+'_'+step+r), 'w') as f:
             f.write(r+'\n')
-            f.write(str(self.elapsed)+'\n')
-        print(self.proj_dir+': '+r+", "+str(self.elapsed))
+            f.write(str(elapsed)+'\n')
+        print(self.proj_dir+': '+r+", "+str(elapsed))
 
-class QuartusSynthesis(SynthesisTool):
+    def run_synthesis(self):
+        '''
+        Synthesize the design and report the results (success, and runtime)
+        '''
+        # create the synthesis script
+        synth_script = self._build_synth_script()
+        self._write_file(self.proj_dir, self.synth_script_name, synth_script)
+        
+        # run the synthesis tool
+        start = time.time()
+        self._run_synthesis_tool()
+        stop = time.time()
+        elapsed = stop - start
+
+        # report the results of synthesis
+        logfile = os.path.join(self.proj_dir, self.synth_logfile_name)
+        success = self._check_log(logfile, self.synth_success_msg)
+        self._report_result(success, elapsed, 'synth')
+
+    def _build_synth_script(self):
+        pass
+
+    def _run_synthesis_tool(self):
+        pass
+
+    def run_pnr(self):
+        '''
+        Iteratively Place and Route the design to search for Fmax and report
+        the results (Fmax, Area, runtime)
+        '''
+        #TODO
+        pass
+
+class Quartus(AbstractFPGATool):
     '''
-    Use Quartus to synthesize a commit level synthesis project.
+    Use Quartus to synthesize, place, and route a commit level synthesis
+    project.
 
     Assumes Quartus executables are on the system path
     '''
     tool_name = 'quartus'
     synth_script_name = 'quartus_synth_script.tcl'
-    success_msg = 'Info: Successfully synthesized'
-    logfile_name = os.path.join('output_files', 'autoqpf.syn.rpt')
+    synth_success_msg  = 'Info: Successfully synthesized'
+    synth_logfile_name = os.path.join('output_files', 'autoqpf.syn.rpt')
+    pnr_script_name = None
+    pnr_success_msg = None
+    pnr_logfile_name = None
+    sdc_name = None
 
     def _build_synth_script(self):
         '''
@@ -85,7 +117,7 @@ class QuartusSynthesis(SynthesisTool):
         top = self.cbb.benchmark['top']
 
         # create the synth script
-        self.synth_script = [
+        synth_script = [
             'project_new autoqpf -overwrite',
             'set_global_assignment -name TOP_LEVEL_ENTITY '+top,
             'set_global_assignment -name DEVICE 1SG085HN1F43E1VG',
@@ -106,8 +138,9 @@ class QuartusSynthesis(SynthesisTool):
             '}',
             'project_close',
         ]
+        return synth_script
 
-    def _run_tool_wrapped(self):
+    def _run_synthesis_tool(self):
         '''
         Use quaruts to build a project from the source files and then
         synthesize that project. Assumes Quartus executables are on the path
@@ -115,16 +148,21 @@ class QuartusSynthesis(SynthesisTool):
         subprocess.run(['quartus_sh', '-t', 'quartus_synth_script.tcl'], cwd=self.proj_dir, capture_output=True)
         subprocess.run(['quartus_syn', 'autoqpf'], cwd=self.proj_dir, capture_output=True)
 
-class VivadoSynthesis(SynthesisTool):
+class Vivado(AbstractFPGATool):
     '''
-    Use Vivado to synthesize a commit level synthesis project.
+    Use Vivado to synthesize, place and route a commit level synthesis project.
 
     Assumes Vivado executables are on the system path
     '''
     tool_name = 'vivado'
     synth_script_name = 'vivado_synth_script.tcl'
-    success_msg = 'synth_design completed successfully'
-    logfile_name = 'vivado.log'
+    synth_success_msg  = 'synth_design completed successfully'
+    synth_logfile_name = 'vivado.log'
+    pnr_script_name = None
+    pnr_success_msg = None
+    pnr_logfile_name = None
+    sdc_name = None
+
 
     def _build_synth_script(self):
         '''
@@ -144,7 +182,7 @@ class VivadoSynthesis(SynthesisTool):
         top = self.cbb.benchmark['top']
 
         # create the synth script
-        self.synth_script = [
+        synth_script = [
             'set outputdir autosynthxpr',
             'set project autosynth',
             'set partnumber xcvu3p-ffvc1517-3-e',
@@ -156,8 +194,9 @@ class VivadoSynthesis(SynthesisTool):
             'catch {synth_design -top '+top+' {*}$synth_args}',
             'exit',
         ]
+        return synth_script
 
-    def _run_tool_wrapped(self):
+    def _run_synthesis_tool(self):
         '''
         Run Vivado in headless mode to execute the synthscript in the commit
         level project directory. Assume Vivado is on the path.
