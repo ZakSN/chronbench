@@ -39,29 +39,47 @@ class AbstractFPGATool:
                 return True
         return False
 
+    def _result_file_path(self, success, step):
+        '''
+        Return the path of a result file from the given step
+        '''
+        if success:
+            r = 'PASS'
+        else:
+            r = 'FAIL'
+        return os.path.join(self.proj_dir, self.tool_name+'_'+step+'.'+r)
+
     def _report_result(self, success, elapsed, step):
         '''
         write a result file to the project directory named
         <tool>_<step>.[PASS|FAIL], that contains the time elapsed to produce
         the result. Also print this information to the terminal.
         '''
-        if success:
-            r = 'PASS'
-        else:
-            r = 'FAIL'
-        with open(os.path.join(self.proj_dir, self.tool_name+'_'+step+r), 'w') as f:
-            f.write(r+'\n')
+        with open(self._result_file_path(success, step), 'w') as f:
             f.write(str(elapsed)+'\n')
-        print(self.proj_dir+': '+r+", "+str(elapsed))
+        print(self.proj_dir+': '+step+' '+str(success)+', '+str(elapsed))
 
     def run_synthesis(self):
         '''
         Synthesize the design and report the results (success, and runtime)
+
+        If a synthesis results file all ready exists for this commit skip it
+        and print a message.
         '''
+        # Check to see if this project has all ready been synthesized
+        passed_synth = os.path.isfile(self._result_file_path(True, 'synth'))
+        failed_synth = os.path.isfile(self._result_file_path(False, 'synth'))
+        if passed_synth:
+            print(self.proj_dir+': Nothing to be done -- PASSED synth')
+            return
+        elif failed_synth:
+            print(self.proj_dir+': Nothing to be done -- FAILED synth')
+            return
+
         # create the synthesis script
         synth_script = self._build_synth_script()
         self._write_file(self.proj_dir, self.synth_script_name, synth_script)
-        
+
         # run the synthesis tool
         start = time.time()
         self._run_synthesis_tool()
@@ -85,6 +103,7 @@ class AbstractFPGATool:
         the results (Fmax, Area, runtime)
         '''
         #TODO
+        print('PNR not implemented yet!')
         pass
 
 class Quartus(AbstractFPGATool):
