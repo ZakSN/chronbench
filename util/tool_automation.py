@@ -7,13 +7,18 @@ class AbstractFPGATool:
     Abstract class for automating FPGA flows over a Chronbench Benchmark
     '''
     tool_name = 'ABSTRACT'
+
     synth_script_name  = 'ABSTRACT_synth_script.tcl'
     synth_success_msg  = 'ABSTRACT SYNTH SUCCESS'
     synth_logfile_name = 'synth_log'
+
     pnr_script_name = 'ABSTRACT_pnr_script.tcl'
     pnr_success_msg = 'ABSTRACT PNR SUCCESS'
     pnr_logfile_name = 'pnr_log'
+
     sdc_name = 'ABSTRACT.sdc'
+    fmax_search_steps = 5
+    period_ns = 1
 
     def __init__(self, proj_dir, chronbench_benchmark):
         self.proj_dir = proj_dir
@@ -59,6 +64,24 @@ class AbstractFPGATool:
             f.write(str(elapsed)+'\n')
         print(self.proj_dir+': '+step+' '+str(success)+', '+str(elapsed))
 
+    def _check_step_complete(self, step):
+        '''
+        Check to see if a result file for <step> exists.
+
+        Returns true if this step has been run (even if it was unsucessful).
+
+        Prints results to terminal
+        '''
+        passed_step = os.path.isfile(self._result_file_path(True, step))
+        failed_step = os.path.isfile(self._result_file_path(False, step))
+        if passed_step:
+            print(self.proj_dir+': Nothing to be done -- PASSED '+step)
+            return True
+        elif failed_step:
+            print(self.proj_dir+': Nothing to be done -- FAILED '+step)
+            return True
+        return False
+
     def run_synthesis(self):
         '''
         Synthesize the design and report the results (success, and runtime)
@@ -67,13 +90,8 @@ class AbstractFPGATool:
         and print a message.
         '''
         # Check to see if this project has all ready been synthesized
-        passed_synth = os.path.isfile(self._result_file_path(True, 'synth'))
-        failed_synth = os.path.isfile(self._result_file_path(False, 'synth'))
-        if passed_synth:
-            print(self.proj_dir+': Nothing to be done -- PASSED synth')
-            return
-        elif failed_synth:
-            print(self.proj_dir+': Nothing to be done -- FAILED synth')
+        synth_done = self._check_step_complete('synth')
+        if synth_done:
             return
 
         # create the synthesis script
@@ -102,8 +120,58 @@ class AbstractFPGATool:
         Iteratively Place and Route the design to search for Fmax and report
         the results (Fmax, Area, runtime)
         '''
-        #TODO
-        print('PNR not implemented yet!')
+        # Check to see if this project has all ready been placed and routed.
+        # XXX: Assume this function will only be run after synthesis
+        pnr_done = self._check_step_complete('pnr')
+        if pnr_done:
+            return
+
+        # create the pnr script
+        pnr_script = self._build_pnr_script()
+        self._write_file(self.proj_dir, self.pnr_script_name, pnr_script)
+
+        start = time.time()
+        # run binary search to determine fmax
+        Tmin = None
+        for _ in range(self.fmax_search_steps):
+            self._write_sdc(self.period_ns)
+            self._run_pnr_tool()
+            logfile = os.path.join(self.proj_dir, self.pnr_logfile_name)
+            success = self._check_log(logfile, self.pnr_success_msg)
+            if success:
+                # fmax could be higher
+                Tmin = self.period_ns
+                self.period_ns = period_ns/2
+            else:
+                # fmax is lower
+                self.period_ns = period_ns*2
+        stop = time.time()
+        elapsed = stop - start
+
+        success = True
+        if Tmin is None:
+            # Failed to find Tmin in the allocated number of search steps
+            success = False
+
+        # report the results of the Tmin search
+        self._report_result(success, elapsed, 'pnr')
+        # record the value of Tmin found
+        self._write_file(self.proj_dir, 'tmin.txt', [str(Tmin)])
+
+    def _build_pnr_script(self):
+        pass
+
+    def _write_sdc(self, period):
+        '''
+        Write and SDC file to constrain the benchmark's clock to <period>
+        '''
+        clock_name = self.cbb.clock
+        sdc = [
+            'create_clock -name '+clock_name+' -period '+str(period)+' [get_ports '+clock_name+']',
+        ]
+        self._write_file(self.proj_dir, self.sdc_name, sdc)
+
+    def _run_pnr_tool(self):
         pass
 
 class Quartus(AbstractFPGATool):
