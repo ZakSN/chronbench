@@ -25,6 +25,7 @@ class ChronbenchBenchmark:
         self.branch   = self.benchmark['branch']
         self.depth    = self.benchmark['depth']
         self.fileset  = self.benchmark['fileset'].split()
+        self.clock    = self.benchmark['clock']
         # not all benchmarks have squash lists
         try:
             self.squash_list = self.benchmark['squash-list'].split()
