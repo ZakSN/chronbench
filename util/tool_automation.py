@@ -132,31 +132,44 @@ class AbstractFPGATool:
 
         start = time.time()
         # run binary search to determine fmax
-        Tmin = None
+        last_guess_too_high = None
+        coef = 0.5
+        guesses = []
         for _ in range(self.fmax_search_steps):
+
+            # guess Tmin == self.period_ns
+            inner_start = time.time()
             self._write_sdc(self.period_ns)
             self._run_pnr_tool()
             logfile = os.path.join(self.proj_dir, self.pnr_logfile_name)
             success = self._check_log(logfile, self.pnr_success_msg)
-            if success:
-                # fmax could be higher
-                Tmin = self.period_ns
-                self.period_ns = period_ns/2
-            else:
-                # fmax is lower
-                self.period_ns = period_ns*2
+            inner_stop = time.time()
+            inner_elapsed = inner_stop - inner_start
+            print('\tPNR: '+self.proj_dir+' @ T='+str(self.period_ns)+'ns (RT: '+str(inner_elapsed)+')')
+
+            if success: # self.period_ns too high
+                guesses.append(str(self.period_ns)+' too high')
+                if last_guess_too_high == False:
+                    coef = coef/2
+                self.period_ns = self.period_ns*(1-coef)
+                last_guess_too_high = True
+            else: # self.period_ns too low
+                guesses.append(str(self.period_ns)+' too low')
+                if last_guess_too_high == True:
+                    coef = coef/2
+                self.period_ns = self.period_ns*(1+coef)
+                last_guess_too_high = False
+
         stop = time.time()
         elapsed = stop - start
 
         success = True
-        if Tmin is None:
-            # Failed to find Tmin in the allocated number of search steps
-            success = False
+        # TODO
 
         # report the results of the Tmin search
         self._report_result(success, elapsed, 'pnr')
         # record the value of Tmin found
-        self._write_file(self.proj_dir, 'tmin.txt', [str(Tmin)])
+        self._write_file(self.proj_dir, 'tmin.txt', guesses)
 
     def _build_pnr_script(self):
         pass
@@ -167,7 +180,7 @@ class AbstractFPGATool:
         '''
         clock_name = self.cbb.clock
         sdc = [
-            'create_clock -name '+clock_name+' -period '+str(period)+' [get_ports '+clock_name+']',
+            'create_clock -name '+clock_name+' -period '+'{:.2f}'.format(period)+' [get_ports '+clock_name+']',
         ]
         self._write_file(self.proj_dir, self.sdc_name, sdc)
 
@@ -182,13 +195,18 @@ class Quartus(AbstractFPGATool):
     Assumes Quartus executables are on the system path
     '''
     tool_name = 'quartus'
+
     synth_script_name = 'quartus_synth_script.tcl'
     synth_success_msg  = 'Info: Successfully synthesized'
     synth_logfile_name = os.path.join('output_files', 'autoqpf.syn.rpt')
-    pnr_script_name = None
-    pnr_success_msg = None
-    pnr_logfile_name = None
-    sdc_name = None
+
+    pnr_script_name = 'quartus_pnr_script.tcl'
+    pnr_success_msg = 'Quartus Prime Timing Analyzer was successful. 0 errors, 0 warnings'
+    pnr_logfile_name = os.path.join('output_files', 'autoqpf.sta.rpt')
+
+    sdc_name = 'quartus_sdc.sdc'
+    fmax_search_steps = 10
+    period_ns = 6
 
     def _build_synth_script(self):
         '''
@@ -207,8 +225,13 @@ class Quartus(AbstractFPGATool):
         synth_script = [
             'project_new autoqpf -overwrite',
             'set_global_assignment -name TOP_LEVEL_ENTITY '+top,
-            'set_global_assignment -name DEVICE 1SG085HN1F43E1VG',
-            'set_global_assignment -name FAMILY "Stratix 10"',
+            #'set_global_assignment -name DEVICE 1SG085HN1F43E1VG', # 280k ALM ~ 841k LE
+            #'set_global_assignment -name FAMILY "Stratix 10"',
+            #'set_global_assignment -name DEVICE 10AX016C3U19E2LG', # 62k ALM ~ 160k LE, 196 user IO
+            'set_global_assignment -name DEVICE 10AS016E3F27E1HG', # 62k ALM ~ 240 user IO
+            'set_global_assignment -name FAMILY "Arria 10"',
+            #'set_global_assignment -name DEVICE 10CX085YF672E5G', # 31k ALM -- No license
+            #'set_global_assignment -name FAMILY "Cyclone 10"',
             'set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files',
             *quartus_extra_commands,
             'set sources [glob src/*]',
@@ -232,8 +255,22 @@ class Quartus(AbstractFPGATool):
         Use quaruts to build a project from the source files and then
         synthesize that project. Assumes Quartus executables are on the path
         '''
-        subprocess.run(['quartus_sh', '-t', 'quartus_synth_script.tcl'], cwd=self.proj_dir, capture_output=True)
+        subprocess.run(['quartus_sh', '-t', self.synth_script_name], cwd=self.proj_dir, capture_output=True)
         subprocess.run(['quartus_syn', 'autoqpf'], cwd=self.proj_dir, capture_output=True)
+
+    def _build_pnr_script(self):
+        pnr_script = [
+            'project_open autoqpf',
+            'set_global_assignment -name SDC_FILE '+self.sdc_name,
+            'project_close',
+        ]
+        return pnr_script
+
+    def _run_pnr_tool(self):
+        # TODO: optimization -- don't need to add the SDC file everytime
+        subprocess.run(['quartus_sh', '-t', self.pnr_script_name], cwd=self.proj_dir, capture_output=True)
+        subprocess.run(['quartus_fit', 'autoqpf'], cwd=self.proj_dir, capture_output=True)
+        subprocess.run(['quartus_sta', 'autoqpf'], cwd=self.proj_dir, capture_output=True)
 
 class Vivado(AbstractFPGATool):
     '''
