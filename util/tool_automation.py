@@ -279,14 +279,18 @@ class Vivado(AbstractFPGATool):
     Assumes Vivado executables are on the system path
     '''
     tool_name = 'vivado'
+
     synth_script_name = 'vivado_synth_script.tcl'
     synth_success_msg  = 'synth_design completed successfully'
     synth_logfile_name = 'vivado.log'
-    pnr_script_name = None
-    pnr_success_msg = None
-    pnr_logfile_name = None
-    sdc_name = None
 
+    pnr_script_name = 'vivado_pnr_script.tcl'
+    pnr_success_msg = 'Slack (MET) :'
+    pnr_logfile_name = os.path.join('autoxpr', 'timing.log')
+
+    sdc_name = 'vivado_sdc.sdc'
+    fmax_search_steps = 10
+    period_ns = 6
 
     def _build_synth_script(self):
         '''
@@ -307,7 +311,7 @@ class Vivado(AbstractFPGATool):
 
         # create the synth script
         synth_script = [
-            'set outputdir autosynthxpr',
+            'set outputdir autoxpr',
             'set project autosynth',
             'set partnumber xcvu3p-ffvc1517-3-e',
             'file mkdir $outputdir',
@@ -315,7 +319,10 @@ class Vivado(AbstractFPGATool):
             *vivado_extra_commands,
             'add_files src',
             'set synth_args {'+vivado_synth_args+'}',
-            'catch {synth_design -top '+top+' {*}$synth_args}',
+            'catch {',
+            '   synth_design -top '+top+' {*}$synth_args',
+            '   write_checkpoint $outputdir/autosynthxpr.dcp',
+            '}',
             'exit',
         ]
         return synth_script
@@ -327,3 +334,33 @@ class Vivado(AbstractFPGATool):
         '''
         subprocess.run(['vivado', '-mode', 'tcl', '-source', self.synth_script_name], cwd=self.proj_dir, capture_output=True)
 
+    def _build_pnr_script(self):
+        '''
+        Vivado PNR script. Opens a synthesized DCP, places and routes it, and
+        then writes out timing information.
+        '''
+        pnr_script = [
+            'set outputdir autoxpr',
+            'set_param general.maxThreads 1', # suspect multiple multithreaded instances cause issues
+            'open_checkpoint $outputdir/autosynthxpr.dcp',
+            'source vivado_sdc.sdc',
+            'opt_design',
+            #'power_opt_design', # optional
+            'place_design',
+            #'power_opt_design', # optional
+            #'phys_opt_design', # optional
+            'route_design',
+            #'phys_opt_design', # optional
+            'report_timing -file $outputdir/timing.log',
+            'report_utilization -file $outputdir/util.log',
+            'write_checkpoint -force $outputdir/autopnrxpr.dcp',
+            'exit'
+        ]
+        return pnr_script
+
+    def _run_pnr_tool(self):
+        '''
+        Run Vivado in headless mode to exec the pnr script. Assumes Vivado is
+        on the path.
+        '''
+        subprocess.run(['vivado', '-mode', 'tcl', '-source', self.pnr_script_name], cwd=self.proj_dir, capture_output=True)
