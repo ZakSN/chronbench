@@ -344,7 +344,7 @@ class Vivado(AbstractFPGATool):
             'set_param general.maxThreads 1', # suspect multiple multithreaded instances cause issues
             'open_checkpoint $outputdir/autosynthxpr.dcp',
             'source vivado_sdc.sdc',
-            'catch {'
+            'catch {',
             '   opt_design',
             #'  power_opt_design', # optional
             '   place_design',
@@ -355,7 +355,7 @@ class Vivado(AbstractFPGATool):
             '   report_timing -file $outputdir/timing.log',
             '   report_utilization -file $outputdir/util.log',
             '   write_checkpoint -force $outputdir/autopnrxpr.dcp',
-            '}'
+            '}',
             'exit'
         ]
         return pnr_script
