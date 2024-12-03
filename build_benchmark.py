@@ -9,7 +9,7 @@ class ChronbenchBenchmark:
     '''
     Manipulate Chronbench Benchmarks.
     '''
-    def __init__(self, benchmark_desc_file, relative_gfr_path):
+    def __init__(self, benchmark_desc_file, relative_gfr_path, record_preserved_commits=False):
         '''
         Initialize benchmark state
         '''
@@ -18,6 +18,10 @@ class ChronbenchBenchmark:
         benchmark_desc = self._parse_benchmark_desc_file(benchmark_desc_file)
         self.name = benchmark_desc.sections()[0]
         self.benchmark = benchmark_desc[self.name]
+
+        # If true also write a csv listing every commit timestamp in the
+        # upstream repo, with commits that made it to the benchmark repo marked.
+        self._rpc = record_preserved_commits
 
         # create variables for all the mandatory benchmark description fields
         self.repo_url = self.benchmark['url']
@@ -52,6 +56,15 @@ class ChronbenchBenchmark:
 
         # Step 3 - Squash unsynthesizable commits
         self._squash_unsynthesizable_commits()
+
+        # If RPC is on dump statistics
+        if self._rpc:
+            with open(self.name + '_statistics.txt', 'w') as statfile:
+                for t in self._all_timestamps:
+                    statfile.write(t)
+                    if t in self._interesting_timestamps:
+                        statfile.write(' *')
+                    statfile.write('\n')
 
     def cleanup_benchmark(self):
         '''
@@ -104,6 +117,10 @@ class ChronbenchBenchmark:
 
         # clone the repo
         subprocess.run(['git', 'clone', self.repo_url])
+
+        # collect all timestamps if RPC is on
+        if self._rpc:
+            self._all_timestamps = self._run_cmd('git log --reflog --format=format:%at')
 
     def _reduce_to_fileset_of_interest(self):
         '''
@@ -194,6 +211,9 @@ class ChronbenchBenchmark:
         unsquashed = self._run_cmd('git log --format=format:%H')
         unsquashed.reverse()
 
+        # if RPC is on collect timestamps of all the interesting commits
+        self._interesting_timestamps = self._run_cmd('git log --format=format:%at')
+
         # create a new branch based off the root commit
         self._run_cmd('git checkout '+unsquashed[0])
         self._run_cmd('git checkout -b '+new_branch)
@@ -248,10 +268,12 @@ def main():
 
     parser.add_argument('benchmark_name', choices=benchmark_names, help='build the named benchmark')
     parser.add_argument('-c', '--clean', action='store_true', help='cleanup the named benchmark')
+    parser.add_argument('-i', '--instrument', action='store_true', help='write instrumentation file')
 
     args = parser.parse_args()
 
-    cbb = ChronbenchBenchmark(benchmarks[args.benchmark_name], 'git-filter-repo')
+    cbb = ChronbenchBenchmark(benchmarks[args.benchmark_name], 'git-filter-repo',
+                              record_preserved_commits = args.instrument)
     if args.clean:
         cbb.cleanup_benchmark()
     else:
