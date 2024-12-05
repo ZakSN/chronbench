@@ -9,7 +9,7 @@ class ChronbenchBenchmark:
     '''
     Manipulate Chronbench Benchmarks.
     '''
-    def __init__(self, benchmark_desc_file, relative_gfr_path, record_preserved_commits=False):
+    def __init__(self, benchmark_desc_file, relative_gfr_path, stats=False):
         '''
         Initialize benchmark state
         '''
@@ -19,9 +19,8 @@ class ChronbenchBenchmark:
         self.name = benchmark_desc.sections()[0]
         self.benchmark = benchmark_desc[self.name]
 
-        # If true also write a csv listing every commit timestamp in the
-        # upstream repo, with commits that made it to the benchmark repo marked.
-        self._rpc = record_preserved_commits
+        # If True write out a file with some statistics about the benchmark
+        self._stats = stats
 
         # create variables for all the mandatory benchmark description fields
         self.repo_url = self.benchmark['url']
@@ -46,6 +45,11 @@ class ChronbenchBenchmark:
         # Step 0 - Get a fresh copy of the upstream repo, and reset it to a
         # known base commit
         self._clone_upstream_repository()
+
+        # If stats are on collect statistics on the upstream repository
+        if self._stats:
+            self._count_hardware_commits()
+
         self._run_cmd('git reset --hard '+self.base_sha)
 
         # Step 1 - Reduce the upstream repo to the Fileset of Interest
@@ -54,17 +58,15 @@ class ChronbenchBenchmark:
         # Step 2 - Reduce upstream repo to the Window of Interest
         self._reduce_to_window_of_interest()
 
+        # If stats are on collect sattistics on the interesting commits
+        if self._stats:
+            self._count_interesting_commits()
+
         # Step 3 - Squash unsynthesizable commits
         self._squash_unsynthesizable_commits()
 
-        # If RPC is on dump statistics
-        if self._rpc:
-            with open(self.name + '_statistics.txt', 'w') as statfile:
-                for t in self._all_timestamps:
-                    statfile.write(t)
-                    if t in self._interesting_timestamps:
-                        statfile.write(' *')
-                    statfile.write('\n')
+        if self._stats:
+            self._dump_stats_file()
 
     def cleanup_benchmark(self):
         '''
@@ -100,6 +102,97 @@ class ChronbenchBenchmark:
         result = result.stdout.decode('utf8').split('\n')
         return result
 
+    def _count_hardware_commits(self):
+        '''
+        Record some commit statistics. Builds a dictionary with entries as:
+            <UNIX author timestamp>: [<net change>, <touches hardware>, <in final benchmark>]
+        This is an instrumentation function, and is not run unless statistic
+        reporting is on.
+        '''
+        self._stats = {}
+
+        # output of the follwing git log is formatted as:
+        #
+        # <UNIX timestamp>
+        # <filename>
+        # ...
+        # <filename>
+        #
+        # ...
+        all_commits = self._run_cmd('git log --reflog --name-only --format=format:%at')
+
+        # state machine to parse the above command
+        state = 'TIMESTAMP'
+        ts = None
+        for line in all_commits:
+            if state == 'TIMESTAMP':
+                ts = int(line)
+                self._stats[ts] = [None, False, False]
+                state = 'FILENAME'
+            elif state == 'FILENAME':
+                if len(line) == 0:
+                    state = 'TIMESTAMP'
+                else:
+                    filetype = line.split('.')[-1]
+                    if filetype in ['v', 'vh', 'sv', 'svh', 'vhd']:
+                        self._stats[ts][1] = True
+
+        # output of the follwing git log is formatted as:
+        #
+        # <UNIX timestamp>
+        # x file[s] changed, [y insertion[s](+),] [z deletion[s](-)]
+        #
+        # ...
+        all_changes = self._run_cmd('git log --reflog --shortstat --format=format:%at')
+        state = 'TIMESTAMP'
+        ts = None
+        for line in all_changes:
+            if state == 'TIMESTAMP':
+                ts = int(line)
+                state = 'CHANGES'
+            elif state == 'CHANGES':
+                if len(line) == 0:
+                    state = 'TIMESTAMP'
+                else:
+                    try:
+                        net = 0
+                        for change in line.split(',')[1:]:
+                            if '+' in change:
+                                net = net + int(change.split()[0])
+                            else:
+                                net = net + -1*int(change.split()[0])
+                        self._stats[ts][0] = net
+                    except:
+                        print(line)
+
+    def _count_interesting_commits(self):
+        '''
+        Collect timestamps of all the interesting commits
+
+        set self._stats[<UNIX author timestamp>][2] = True
+        '''
+        interesting_timestamps = self._run_cmd('git log --format=format:%at')
+        for its in interesting_timestamps:
+            try:
+                self._stats[int(its)][2] = True
+            except KeyError:
+                # the first commit in the WoI is new, and therefore not in
+                # the upstream history
+                pass
+
+    def _dump_stats_file(self):
+        '''
+        Write the stats dictionary to a file
+        '''
+        with open(self.name + '_statistics.txt', 'w') as statfile:
+            for key, value in self._stats.items():
+                statfile.write(str(key))
+                statfile.write(' ')
+                for item in value:
+                    statfile.write(str(item))
+                    statfile.write(' ')
+                statfile.write('\n')
+
     def _clone_upstream_repository(self):
         '''
         Clone the upstream repository
@@ -117,10 +210,6 @@ class ChronbenchBenchmark:
 
         # clone the repo
         subprocess.run(['git', 'clone', self.repo_url])
-
-        # collect all timestamps if RPC is on
-        if self._rpc:
-            self._all_timestamps = self._run_cmd('git log --reflog --format=format:%at')
 
     def _reduce_to_fileset_of_interest(self):
         '''
@@ -211,9 +300,6 @@ class ChronbenchBenchmark:
         unsquashed = self._run_cmd('git log --format=format:%H')
         unsquashed.reverse()
 
-        # if RPC is on collect timestamps of all the interesting commits
-        self._interesting_timestamps = self._run_cmd('git log --format=format:%at')
-
         # create a new branch based off the root commit
         self._run_cmd('git checkout '+unsquashed[0])
         self._run_cmd('git checkout -b '+new_branch)
@@ -268,12 +354,12 @@ def main():
 
     parser.add_argument('benchmark_name', choices=benchmark_names, help='build the named benchmark')
     parser.add_argument('-c', '--clean', action='store_true', help='cleanup the named benchmark')
-    parser.add_argument('-i', '--instrument', action='store_true', help='write instrumentation file')
+    parser.add_argument('-s', '--stats', action='store_true', help='write statistics file')
 
     args = parser.parse_args()
 
     cbb = ChronbenchBenchmark(benchmarks[args.benchmark_name], 'git-filter-repo',
-                              record_preserved_commits = args.instrument)
+                              stats = args.stats)
     if args.clean:
         cbb.cleanup_benchmark()
     else:
