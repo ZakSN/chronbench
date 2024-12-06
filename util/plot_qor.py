@@ -37,7 +37,7 @@ def collect_tmin_data(proj_list):
     # convert to fmax:
     # t is in units of ns [1e-9], we want to display MHz (1e6)
     tmin_data = [(x[0], (1/(x[1]*1e-9))/1e6, (1/(x[2]*1e-9))/1e6) for x in tmin_data]
-    tmin_data_x = [x[0] for x in tmin_data]
+    tmin_data_x = [int(x[0]) for x in tmin_data]
     tmin_data_mid = [(y[1] + y[2])/2 for y in tmin_data]
     tmin_data_unc = [y[1] - y[2] for y in tmin_data]
     return (tmin_data_x, tmin_data_mid, tmin_data_unc)
@@ -64,17 +64,23 @@ def collect_util_data(proj_list):
         except FileNotFoundError:
             print("WARNING: no utilization log at "+str(path))
     util_data = sorted(util_data, key=lambda dp: dp[0])
-    util_data_x = [x[0] for x in util_data]
+    util_data_x = [int(x[0]) for x in util_data]
     util_data_y = [y[1] for y in util_data]
     return (util_data_x, util_data_y)
 
-def plot_data(util_data, tmin_data, tool, benchmark):
+def plot_data(all_util_data, all_tmin_data, tool, benchmark):
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
-    ax1.grid(visible=True)
-    ax2.grid(visible=True)
-    ax1.scatter(util_data[0], util_data[1])
-    ax2.errorbar(util_data[0], tmin_data[1], yerr=tmin_data[2], fmt='o')
+    ax1.grid(visible=True, which='both')
+    ax2.grid(visible=True, which='both')
+    ax1.set_yscale('log')
+    fmt_l = ['o', '^', 'v', 's', 'X']
+    for idx in range(len(all_util_data)):
+        util_data = all_util_data[idx]
+        tmin_data = all_tmin_data[idx]
+        ax1.scatter(util_data[0], util_data[1], marker=fmt_l[idx], label=benchmark[idx])
+        ax2.errorbar(util_data[0], tmin_data[1], yerr=tmin_data[2], fmt=fmt_l[idx], label=benchmark[idx])
     plt.xticks(rotation=90)
+    '''
     xlabels = []
     xfirst = 'HEAD'
     xlast = 'HEAD~'+util_data[0][-1]
@@ -94,11 +100,16 @@ def plot_data(util_data, tmin_data, tool, benchmark):
     ticklabels[-1].set_rotation(0)
     ticklabels[-1].set_ha('right')
     plt.gca().invert_xaxis()
-    ax2.set_xlabel('Commit')
+    '''
+    ax2.set_xlabel('Commit Number')
     ax1.set_ylabel('Area [CLBs]')
     ax2.set_ylabel('$F_{max}$ [MHz]')
-    fig.suptitle('Area and $F_{max}$ vs. Commit for '+benchmark)
-    plt.savefig(os.path.join('util', tool+'_'+benchmark+'_char_results.png'))
+    fig.suptitle('Area and $F_{max}$ vs. Commit')
+    ax1.legend()
+    #plt.show()
+    #plt.savefig(os.path.join('util', tool+'_'+benchmark+'_char_results.png'))
+    plt.gcf().set_size_inches(17, 10)
+    plt.savefig(os.path.join('util', tool+'_char_results.png'))
 
 def main():
     os.chdir('..')
@@ -121,16 +132,28 @@ def main():
 
     args = parser.parse_args()
 
-    char_proj = SetupCharacterizationProjects(benchmarks[args.benchmark_name], args.tool)
-    projs = char_proj.build_directory_structure()
+    all_util_data = []
+    all_tmin_data = []
 
-    tmin_data = collect_tmin_data(projs[1])
-    util_data = collect_util_data(projs[1])
+    #to_plot = [args.benchmark_name]
+    #title = args.benchmark_name
+    to_plot = ['regex_coprocessor', 'cva5', 'zipcpu', 'jt12', 'vortex']
+    title = 'All Chronbench Benchmarks'
 
-    print(tmin_data)
-    print(util_data)
+    for benchmark_name in to_plot:
+        char_proj = SetupCharacterizationProjects(benchmarks[benchmark_name], args.tool)
+        projs = char_proj.build_directory_structure()
 
-    plot_data(util_data, tmin_data, args.tool, args.benchmark_name)
+        tmin_data = collect_tmin_data(projs[1])
+        util_data = collect_util_data(projs[1])
+
+        print(tmin_data)
+        print(util_data)
+
+        all_util_data.append(util_data)
+        all_tmin_data.append(tmin_data)
+
+    plot_data(all_util_data, all_tmin_data, args.tool, to_plot)
 
 if __name__ == '__main__':
     main()
