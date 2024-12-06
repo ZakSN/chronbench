@@ -4,6 +4,7 @@ import numpy as np
 
 def read_stats_files(to_plot):
     commit_data = []
+    bulk_data = {}
     for bmark in to_plot:
         data = []
         in_cb = 0
@@ -20,8 +21,9 @@ def read_stats_files(to_plot):
                 data.append((int(line[0]), int(line[1]), ctype))
         data = sorted(data, key=lambda commit: commit[0])
         print(bmark+' total: '+str(len(data))+', chronbench: '+str(in_cb))
+        bulk_data[bmark] = (len(data), in_cb)
         commit_data.append(data)
-    return commit_data
+    return commit_data, bulk_data
 
 def draw_stripchart(to_plot, commit_data):
     fig, ax = plt.subplots(len(to_plot), 1, sharex=False)
@@ -51,10 +53,14 @@ def draw_barchart(to_plot, commit_data):
         ax[idx].margins(0.0)
     return fig, ax
 
-def label_chart(to_plot, fig, ax, name):
+def label_chart(to_plot, fig, ax, name, bulk_data):
     for idx in range(len(to_plot)):
         ax[idx].set_title(to_plot[idx])
-        #ax[idx].set_ylabel(to_plot[idx], rotation=0, horizontalalignment='right')
+        ax[idx].set_ylabel(bulk_data[to_plot[idx]][1],
+                           rotation=0,
+                           horizontalalignment='right',
+                           verticalalignment='center',
+                           backgroundcolor=plt.colormaps['viridis'](1.0))
         ticklabels = ax[idx].get_yticklabels()
         top = ticklabels[0]
         bottom = ticklabels[-1]
@@ -65,6 +71,8 @@ def label_chart(to_plot, fig, ax, name):
         ticklabels[-1] = bottom
         ax[idx].set_yticklabels(ticklabels)
         ax[idx].yaxis.tick_right()
+        ax[idx].set_xticks(list(ax[idx].get_xticks()) + [bulk_data[to_plot[idx]][0]])
+        ax[idx].set_xlim(0, bulk_data[to_plot[idx]][0])
     ax[-1].set_xlabel('Commit Number')
     nhw = plt.Line2D([],[], color=plt.colormaps['viridis'](0.0), label='Non-HDL')
     uhw = plt.Line2D([],[], color=plt.colormaps['viridis'](0.5), label='HDL')
@@ -76,12 +84,12 @@ def label_chart(to_plot, fig, ax, name):
 
 def main():
     to_plot = ['regex_coprocessor', 'cva5', 'zipcpu', 'jt12', 'vortex']
-    commit_data = read_stats_files(to_plot)
+    commit_data, bulk_data = read_stats_files(to_plot)
 
     fig, ax = draw_stripchart(to_plot, commit_data)
-    label_chart(to_plot, fig, ax, 'chronbench_stripchart.png')
+    label_chart(to_plot, fig, ax, 'chronbench_stripchart.png', bulk_data)
     fig, ax = draw_barchart(to_plot, commit_data)
-    label_chart(to_plot, fig, ax, 'chronbench_barchart.png')
+    label_chart(to_plot, fig, ax, 'chronbench_barchart.png', bulk_data)
 
 if __name__ == '__main__':
     main()
