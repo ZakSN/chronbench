@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
+import matplotlib
 import sys
 import os
-import argparse
 
 from characterize_benchmark import SetupCharacterizationProjects
 sys.path.insert(1, os.path.join('..'))
@@ -68,92 +68,69 @@ def collect_util_data(proj_list):
     util_data_y = [y[1] for y in util_data]
     return (util_data_x, util_data_y)
 
-def plot_data(all_util_data, all_tmin_data, tool, benchmark):
-    fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
-    ax1.grid(visible=True, which='both')
-    ax2.grid(visible=True, which='both')
-    ax1.set_yscale('log')
-    fmt_l = ['o', '^', 'v', 's', 'X']
-    for idx in range(len(all_util_data)):
-        util_data = all_util_data[idx]
-        tmin_data = all_tmin_data[idx]
-        ax1.scatter(util_data[0], util_data[1], marker=fmt_l[idx], label=benchmark[idx])
-        ax2.errorbar(util_data[0], tmin_data[1], yerr=tmin_data[2], fmt=fmt_l[idx], label=benchmark[idx])
-    plt.xticks(rotation=90)
-    '''
-    xlabels = []
-    xfirst = 'HEAD'
-    xlast = 'HEAD~'+util_data[0][-1]
-    for idx in range(len(util_data[0])):
-        label = util_data[0][idx]
-        if int(label) % 5 == 0:
-            xlabels.append(label)
-        else:
-            xlabels.append('')
-    xlabels[0] = xfirst
-    xlabels[-1] = xlast
-    print(xlabels)
-    ax2.set_xticklabels(xlabels)
-    ticklabels = ax2.get_xticklabels()
-    ticklabels[0].set_rotation(0)
-    ticklabels[0].set_ha('left')
-    ticklabels[-1].set_rotation(0)
-    ticklabels[-1].set_ha('right')
-    plt.gca().invert_xaxis()
-    '''
-    ax2.set_xlabel('Commit Number')
-    ax1.set_ylabel('Area [CLBs]')
-    ax2.set_ylabel('$F_{max}$ [MHz]')
-    fig.suptitle('Area and $F_{max}$ vs. Commit')
-    ax1.legend()
-    #plt.show()
-    #plt.savefig(os.path.join('util', tool+'_'+benchmark+'_char_results.png'))
+def plot_data(to_plot, tool):
+    fig = plt.figure()
+    gs = plt.GridSpec(5,3, height_ratios=[1,1,0.2,1,1])
+    def build_qor_subplot(udim, tdim):
+        uax = fig.add_subplot(udim)
+        uax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
+        tax = fig.add_subplot(tdim, sharex=uax)
+        uax.tick_params('x', labelbottom=False)
+        return (uax, tax)
+    axes = dict.fromkeys(to_plot)
+    axes['cva5']               = build_qor_subplot(gs[0,0], gs[1,0])
+    axes['zipcpu']             = build_qor_subplot(gs[0,1], gs[1,1])
+    axes['jt12']               = build_qor_subplot(gs[0,2], gs[1,2])
+    fig.add_subplot(gs[2,0]).set_visible(False)
+    axes['regex_coprocessor']  = build_qor_subplot(gs[3,0], gs[4,0])
+    axes['vortex']             = build_qor_subplot(gs[3,1:], gs[4,1:])
+
+    for bname, subax in axes.items():
+        uax = subax[0]
+        tax = subax[1]
+        uax.grid(visible=True, which='both')
+        tax.grid(visible=True, which='both')
+        uax.scatter(to_plot[bname][0][0], to_plot[bname][0][1], marker='.')
+        tax.errorbar(to_plot[bname][1][0], to_plot[bname][1][1], yerr=to_plot[bname][1][2], fmt='.')
+        uax.set_title(bname)
+
+    area_label = 'Area [CLBs]'
+    fmax_label = '$f_{max}$ [MHz]'
+    commit_label = 'HEAD~<N>'
+    axes['cva5'][0].set_ylabel(area_label)
+    axes['cva5'][1].set_ylabel(fmax_label)
+    axes['regex_coprocessor'][0].set_ylabel(area_label)
+    axes['regex_coprocessor'][1].set_ylabel(fmax_label)
+    axes['regex_coprocessor'][1].set_xlabel(commit_label)
+    axes['vortex'][1].set_xlabel(commit_label)
+
     plt.gcf().set_size_inches(17, 10)
-    plt.savefig(os.path.join('util', tool+'_char_results.png'))
+    plt.savefig(os.path.join('util', tool+'_char_results.png'), bbox_inches='tight')
 
 def main():
     os.chdir('..')
 
-    parser = argparse.ArgumentParser(
-        prog='plot_qor.py',
-        description='plot Quality of Results from a timeseries benchmark'
-    )
-
     benchmarks = get_available_benchmarks('benchmarks')
     benchmark_names = benchmarks.keys()
 
-    tools = {
-        'vivado' : None,
-        #'quartus' : None,
-        }
+    tool = 'vivado'
+    to_plot = {'regex_coprocessor' : None,
+               'cva5' : None,
+               'zipcpu' : None,
+               'jt12' : None,
+               'vortex' : None,
+              }
 
-    parser.add_argument('tool', choices=tools.keys(), help='FPGA tool to use')
-    parser.add_argument('benchmark_name', choices=benchmark_names, help='benchmark to operate on')
-
-    args = parser.parse_args()
-
-    all_util_data = []
-    all_tmin_data = []
-
-    #to_plot = [args.benchmark_name]
-    #title = args.benchmark_name
-    to_plot = ['regex_coprocessor', 'cva5', 'zipcpu', 'jt12', 'vortex']
-    title = 'All Chronbench Benchmarks'
-
-    for benchmark_name in to_plot:
-        char_proj = SetupCharacterizationProjects(benchmarks[benchmark_name], args.tool)
+    for benchmark_name in to_plot.keys():
+        char_proj = SetupCharacterizationProjects(benchmarks[benchmark_name], tool)
         projs = char_proj.build_directory_structure()
 
         tmin_data = collect_tmin_data(projs[1])
         util_data = collect_util_data(projs[1])
 
-        print(tmin_data)
-        print(util_data)
+        to_plot[benchmark_name] = (util_data, tmin_data)
 
-        all_util_data.append(util_data)
-        all_tmin_data.append(tmin_data)
-
-    plot_data(all_util_data, all_tmin_data, args.tool, to_plot)
+    plot_data(to_plot, tool)
 
 if __name__ == '__main__':
     main()
