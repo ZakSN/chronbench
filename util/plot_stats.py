@@ -18,7 +18,10 @@ def read_stats_files(to_plot):
                         ctype = ctype + 1
                 if ctype == 2:
                     in_cb = in_cb + 1
-                data.append((int(line[0]), int(line[1]), ctype))
+                if line[1] != 'None':
+                    data.append((int(line[0]), int(line[1]), ctype))
+                else:
+                    data.append((int(line[0]), 0, ctype))
         data = sorted(data, key=lambda commit: commit[0])
         print(bmark+' total: '+str(len(data))+', chronbench: '+str(in_cb))
         bulk_data[bmark] = (len(data), in_cb)
@@ -72,6 +75,11 @@ def label_chart(to_plot, fig, ax, name, bulk_data):
         ax[idx].set_yticklabels(ticklabels)
         ax[idx].yaxis.tick_right()
         ax[idx].set_xticks(list(ax[idx].get_xticks()) + [bulk_data[to_plot[idx]][0]])
+        xticklabels = ax[idx].get_xticklabels()
+        for xtick in range(len(xticklabels)):
+            xticklabels[xtick].set_ha('right')
+        xticklabels[-1].set_ha('left')
+        ax[idx].set_xticklabels(xticklabels)
         ax[idx].set_xlim(0, bulk_data[to_plot[idx]][0])
     ax[-1].set_xlabel('Commit Number')
     nhw = plt.Line2D([],[], color=plt.colormaps['viridis'](0.0), label='Non-HDL')

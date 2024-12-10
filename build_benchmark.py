@@ -119,51 +119,43 @@ class ChronbenchBenchmark:
         # <filename>
         #
         # ...
+        #
+        # commits that do not change files (some merges) do not have a newline
+        # after the timestamp:
+        # <UNIX timestamp>
+        # ...
         all_commits = self._run_cmd('git log --reflog --name-only --format=format:%at')
-
-        # state machine to parse the above command
-        state = 'TIMESTAMP'
         ts = None
         for line in all_commits:
-            if state == 'TIMESTAMP':
+            try:
                 ts = int(line)
                 self._stats[ts] = [None, False, False]
-                state = 'FILENAME'
-            elif state == 'FILENAME':
-                if len(line) == 0:
-                    state = 'TIMESTAMP'
-                else:
+            except ValueError:
+                if len(line) != 0:
                     filetype = line.split('.')[-1]
                     if filetype in ['v', 'vh', 'sv', 'svh', 'vhd']:
                         self._stats[ts][1] = True
-
         # output of the follwing git log is formatted as:
         #
         # <UNIX timestamp>
         # x file[s] changed, [y insertion[s](+),] [z deletion[s](-)]
         #
         # ...
+        # commits that do not change files don't have newlines as above
         all_changes = self._run_cmd('git log --reflog --shortstat --format=format:%at')
-        state = 'TIMESTAMP'
         ts = None
         for line in all_changes:
-            if state == 'TIMESTAMP':
+            try:
                 ts = int(line)
-                state = 'CHANGES'
-            elif state == 'CHANGES':
-                if len(line) == 0:
-                    state = 'TIMESTAMP'
-                else:
-                    try:
-                        net = 0
-                        for change in line.split(',')[1:]:
-                            if '+' in change:
-                                net = net + int(change.split()[0])
-                            else:
-                                net = net + -1*int(change.split()[0])
-                        self._stats[ts][0] = net
-                    except:
-                        print(line)
+            except ValueError:
+                if len(line) != 0:
+                    net = 0
+                    for change in line.split(',')[1:]:
+                        if '+' in change:
+                            net = net + int(change.split()[0])
+                        else:
+                            net = net + -1*int(change.split()[0])
+                    self._stats[ts][0] = net
 
     def _count_interesting_commits(self):
         '''
