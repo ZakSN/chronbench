@@ -154,7 +154,7 @@ class ChronbenchBenchmark:
                         if '+' in change:
                             net = net + int(change.split()[0])
                         else:
-                            net = net + -1*int(change.split()[0])
+                            net = net + int(change.split()[0])
                     self._stats[ts][0] = net
 
     def _count_interesting_commits(self):
