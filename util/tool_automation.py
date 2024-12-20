@@ -160,6 +160,21 @@ class AbstractFPGATool:
                 self.period_ns = self.period_ns*(1+coef)
                 last_guess_too_high = False
 
+        # we don't want to report area numbers if timing wasn't met. therefore
+        # may need to re-run last 'too high' guess to get a valid area number:
+        if last_guess_too_high == False:
+            for idx in reversed(range(len(guesses))):
+                tmin = float(guesses[idx].split()[0])
+                success = guesses[idx].split()[-1]
+                if success == 'high':
+                    break
+            self.period_ns = tmin
+            self._write_sdc(self.period_ns)
+            self._run_pnr_tool()
+            print('\tPNR: '+self.proj_dir+' Last guess failed, re-running last successful')
+        else:
+            print('\tPNR: '+self.proj_dir+' Last guess successful')
+
         stop = time.time()
         elapsed = stop - start
 
