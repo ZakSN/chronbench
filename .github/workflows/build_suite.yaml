@@ -17,7 +17,9 @@ jobs:
                     - vortex
         steps:
         - name: Git checkout
-          uses: actions/checkout@v2
+          uses: actions/checkout@v4
+          with:
+            submodules: 'recursive'
         - name: git
           run: |
             # Setup git
