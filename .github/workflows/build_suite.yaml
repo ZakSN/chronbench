@@ -23,10 +23,11 @@ jobs:
             # Setup git
             git config user.name "GitHub Actions Bot"
             git config user.email "chronbench@email.com"
-        - name: build all
+        - name: python
           uses: actions/setup-python@v5
           with:
             python-version: '3.12'
             check-latest: true
             cache: 'pip'
+        - name: build benchmarks
           run: python build_benchmark.py matrix.benchmark
