@@ -37,4 +37,4 @@ jobs:
             name: matrix.benchmark
             compression-level: 0
             path: |
-                "${{ matrix.benchmark }}/"
+                ${{ matrix.benchmark }}/
