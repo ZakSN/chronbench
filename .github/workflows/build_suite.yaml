@@ -36,6 +36,6 @@ jobs:
           with:
             name: ${{ matrix.benchmark }}
             compression-level: 0
-            hidden-files: true
+            include-hidden-files: true
             path: |
                 ${{ matrix.benchmark }}/
