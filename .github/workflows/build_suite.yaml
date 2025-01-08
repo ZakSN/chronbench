@@ -1,0 +1,32 @@
+name: Build Suite
+
+on:
+    push:
+        branches: [ main ]
+
+jobs:
+    build-suite:
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                benchmark:
+                    - regex_coprocessor
+                    - cva5
+                    - zipcpu
+                    - jt12
+                    - vortex
+        steps:
+        - name: Git checkout
+          uses: actions/checkout@v2
+        - name: git
+          run: |
+            # Setup git
+            git config user.name "GitHub Actions Bot"
+            git config user.email "chronbench@email.com"
+        - name: build all
+          uses: actions/setup-python@v5
+          with:
+            python-version: '3.12'
+            check-latest: true
+            cache: 'pip'
+          run: python build_benchmark.py matrix.benchmark
