@@ -29,8 +29,6 @@ jobs:
           uses: actions/setup-python@v5
           with:
             python-version: '3.12'
-        - name: build benchmarks
-          run: python build_benchmark.py "${{ matrix.benchmark }}"
         - name: preserve benchmark
           uses: actions/upload-artifact@v4
           with:
@@ -38,3 +36,5 @@ jobs:
             compression-level: 0
             path: |
                 "${{ matrix.benchmark }}"
+        - name: build benchmarks
+          run: python build_benchmark.py "${{ matrix.benchmark }}"
