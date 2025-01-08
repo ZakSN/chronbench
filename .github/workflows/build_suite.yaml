@@ -28,14 +28,13 @@ jobs:
         - name: python
           uses: actions/setup-python@v5
           with:
-            python-version: '3.12'
+            python-version: '3.6'
         - name: build benchmarks
           run: python build_benchmark.py "${{ matrix.benchmark }}"
         - name: preserve benchmark
           uses: actions/upload-artifact@v4
           with:
             name: ${{ matrix.benchmark }}
-            compression-level: 0
             include-hidden-files: true
             path: |
                 ${{ matrix.benchmark }}/
