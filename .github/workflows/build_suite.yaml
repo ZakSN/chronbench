@@ -23,14 +23,19 @@ jobs:
         - name: git
           run: |
             # Setup git
-            git config user.name "GitHub Actions Bot"
-            git config user.email "chronbench@email.com"
+            git config --global user.name "GitHub Actions Bot"
+            git config --global user.email "chronbench@email.com"
         - name: python
           uses: actions/setup-python@v5
           with:
-            python-version: '3.6.15'
+            python-version: '3.12'
         - name: build benchmarks
           run: python build_benchmark.py "${{ matrix.benchmark }}"
+        - name: packaging hack
+          run: |
+            mkdir "${{ matrix.benchmark }}"-tmp
+            mv "${{ matrix.benchmark }}" "${{ matrix.benchmark }}"-tmp
+            mv "${{ matrix.benchmark }}"-tmp "${{ matrix.benchmark }}"
         - name: preserve benchmark
           uses: actions/upload-artifact@v4
           with:
