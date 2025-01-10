@@ -9,3 +9,11 @@ As such we introduce Chronbench, a suite of HDL benchmarks which encapsulate dev
 In addition to five such benchmarks we present a tool for converting a public repository into a into a Chronbench benchmark.
 Further, we synthesize, place, and route 170  commits in order to fully characterize the suite.
 Finally, we analyze the characterization data to produce some key insights about the relative magnitude of HDL development changes and observe that approximately half of real development commits do not significantly impact device utilization, indicating significant potential for reuse during HDL development.
+
+# Benchmark Downloads
+1. [regex_coprocessor](https://osf.io/download/9vhbj/?view_only=eea52a99d44c426fb1c3a5eab9d15a3f)
+2. [cva5](https://osf.io/download/pj6nu/?view_only=eea52a99d44c426fb1c3a5eab9d15a3f)
+3. [zipcpu](https://osf.io/download/u3xe7/?view_only=eea52a99d44c426fb1c3a5eab9d15a3f)
+4. [jt12](https://osf.io/download/gudyt/?view_only=eea52a99d44c426fb1c3a5eab9d15a3f)
+5. [vortex](https://osf.io/download/3dfkb/?view_only=eea52a99d44c426fb1c3a5eab9d15a3f)
+
