@@ -11,7 +11,7 @@ Further, we synthesize, place, and route 170  commits in order to fully characte
 Finally, we analyze the characterization data to produce some key insights about the relative magnitude of HDL development changes and observe that approximately half of real development commits do not significantly impact device utilization, indicating significant potential for reuse during HDL development.
 
 # Anonymous Benchmark Downloads
-1. [regex_coprocessor](https://osf.io/download/9vhbj/?view_only=eea52a99d44c426fb1c3a5eab9d15a3f)
+1. regex_coprocessor (Unavailable to ensure license compatibility)
 2. [cva5](https://osf.io/download/pj6nu/?view_only=eea52a99d44c426fb1c3a5eab9d15a3f)
 3. [zipcpu](https://osf.io/download/u3xe7/?view_only=eea52a99d44c426fb1c3a5eab9d15a3f)
 4. [jt12](https://osf.io/download/gudyt/?view_only=eea52a99d44c426fb1c3a5eab9d15a3f)

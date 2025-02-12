@@ -11,7 +11,7 @@ jobs:
         strategy:
             matrix:
                 benchmark:
-                    - regex_coprocessor
+                    #- regex_coprocessor # Disabled to ensure license compatibility
                     - cva5
                     - zipcpu
                     - jt12
