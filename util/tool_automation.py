@@ -332,6 +332,8 @@ class Vivado(AbstractFPGATool):
             'file mkdir $outputdir',
             'create_project -part $partnumber $project $outputdir',
             'add_files src',
+            'set_property top '+top+' [current_fileset]',
+            'update_compile_order',
             *vivado_extra_commands,
             'set synth_args {'+vivado_synth_args+'}',
             'catch {',
