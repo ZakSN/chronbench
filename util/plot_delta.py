@@ -79,7 +79,7 @@ def plot_sloc_vs_hw(dsloc, dhw):
     #ax.set_xscale('log')
     ax.grid(visible=True, which='major')
     ax.set_xlabel('Change in SLoC [log(lines)]')
-    ax.set_ylabel('Change in Area [log(CLBs)]')
+    ax.set_ylabel('Change in Area [log(LUTs)]')
 
     hw_std = np.std(dhw)
     hw_mean = np.mean(dhw)
@@ -108,7 +108,7 @@ def plot_hw_hist(dhw):
     ax = plt.gca()
     ax.grid(visible=True, which='major')
     ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
-    ax.set_xlabel('Change in Area [CLBs]')
+    ax.set_xlabel('Change in Area [LUTs]')
     ax.set_ylabel('Number of Commits')
     #plt.hist(dhw[:stop_idx], [0,1,2,3,4,5,6,7,8,9])
     n, bins, patches = plt.hist(dhw, [0,1,10,100,1000,10000])

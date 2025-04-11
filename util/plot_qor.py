@@ -47,7 +47,7 @@ def collect_util_data(proj_list):
     '''
     Read the results of the vivado utilization reports for each project in proj_list
 
-    Returns a sorted 2-tuple formatted as ([commit numbers], [CLB counts])
+    Returns a sorted 2-tuple formatted as ([commit numbers], [CLB LUT counts])
     '''
     util_data = []
     for path in proj_list:
@@ -94,7 +94,7 @@ def plot_data(to_plot, tool):
         tax.errorbar(to_plot[bname][1][0], to_plot[bname][1][1], yerr=to_plot[bname][1][2], fmt='.')
         uax.set_title(bname)
 
-    area_label = 'Area [CLBs]'
+    area_label = 'Area [LUTs]'
     fmax_label = '$f_{max}$ [MHz]'
     commit_label = 'HEAD~<N>'
     axes['cva5'][0].set_ylabel(area_label)
