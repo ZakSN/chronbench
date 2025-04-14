@@ -83,3 +83,20 @@ in `../util`.
 ### `quartus-extra-commands` (optional)
 Extra TCL commands to insert in the Quartus build script used by the
 characterization experiment in `../util`.
+
+## Benchmark Suite Notes
+
+### `regex_coprocessor`
+The design state captured at commits `HEAD~2` and `HEAD~3` has combinatorial
+loops. While this seems unintentional since later commits revert it, it was
+elected to leave these commits in the benchmark as it is an example of HDL input
+that an FPGA tool ought to deal with somehow (even if that just means throwing
+an error).
+
+Note: Vivado and Quartus both issue warnings when combinatorial loops are
+present and seem to do a 'best guess' when evaluating timing.
+
+### `jt12`
+Many commits contain files with a `@negedge` reset. This is presumably required
+to produce cycle accurate emulation behaviour. Again, this presents somewhat
+unusual HDL but is included as an additional form of stress test.
